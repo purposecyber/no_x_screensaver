@@ -1,5 +1,5 @@
 # no_x_screensaver
-Run a screensaver on any linux device by writing directly to the framebuffer, no X server required
+Run a screensaver on any linux device by writing directly to the framebuffer, no X server required. No graphical package dependencies.
 
 ## NO X SERVER MAY BE RUNNING
 Having a running X environment will be hammering the framebuffer. You can run this program, but you won't see any output!
