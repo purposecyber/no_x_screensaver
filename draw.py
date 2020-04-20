@@ -23,6 +23,7 @@ class FrameBufScreen:
             return(self.x, self.y)
 
     def __init__(self, framebuf=0):
+
         assert(type(framebuf) is int)
         self.bufnum = framebuf
         self.stride = int(open("/sys/class/graphics/fb{}/stride".format(framebuf), "r").read().strip())
@@ -35,12 +36,12 @@ class FrameBufScreen:
                 open("/sys/class/graphics/fb0/bits_per_pixel", "r")\
                     .read().strip())
 
-        self.xpixels = range(xpixels+1)
-        self.ypixels = range(ypixels+1)
-        self.blank_screen()
+        self.xpixels = range(xpixels)
+        self.ypixels = range(ypixels)
+        self.blit = bytearray(self.stride * len(self.ypixels))
         
     def blank_screen(self):
-        self.blit = bytearray(self.stride * self.ypixels+1)
+        self.blit = bytearray(self.stride * len(self.ypixels))
 
     def set_pixel(self, pixel):
         if pixel.x not in self.xpixels:
