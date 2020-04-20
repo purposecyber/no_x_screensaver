@@ -8,6 +8,7 @@ class FrameBufScreen:
             self.b, self.g, self.r = bgr
 
         def as_bytes(self):
+            # assumes TRUECOLOR -- there are other options here depending on your hardware.
             return struct.pack(b"BBBB", *self.bgr(),0)
         
         @staticmethod
@@ -25,19 +26,19 @@ class FrameBufScreen:
         assert(type(framebuf) is int)
         self.bufnum = framebuf
         self.stride = int(open("/sys/class/graphics/fb{}/stride".format(framebuf), "r").read().strip())
-        self.bufsize = int(open("/sys/class/graphics/fb{}/stride".format(framebuf), "r").read().strip())
+        
         xpixels, ypixels = [int(d) for d in open(
                     "/sys/class/graphics/fb{}/virtual_size".format(framebuf), "r")\
                     .read().strip().split(",")]
-
+        
         self.bits_per_pixel = int(
                 open("/sys/class/graphics/fb0/bits_per_pixel", "r")\
                     .read().strip())
 
         self.xpixels = range(xpixels+1)
         self.ypixels = range(ypixels+1)
-        self.blit = bytearray(self.stride * ypixels+1)
-
+        self.blank_screen()
+        
     def blank_screen(self):
         self.blit = bytearray(self.stride * self.ypixels+1)
 
@@ -58,6 +59,8 @@ class FrameBufScreen:
     def read(self):
         self.blit = open("/dev/fb{}".format(self.bufnum), "rb").read()
 
+    # really slow. could at least write entire circle width as a single write instead of each pixel.
+    # might also try to optimize the math using bitwise functions
     def draw_circle(self, xy, bgr, r, ignore_oob=True):
         x_center, y_center = xy
         try:
@@ -67,7 +70,6 @@ class FrameBufScreen:
                 pass
             else:
                 raise e
-
 
         for x_offset in range(1,r+1):
             for y_offset in range(int(pow(pow(r,2) - pow(x_offset,2),.5)) + 1):
@@ -83,6 +85,7 @@ class FrameBufScreen:
                         else:
                             raise e
 
+    # also really slow. at least 25% speedup by only writing leading edge of circle
     def draw_line(self,x1y1,x2y2,bgr_line, thickness=1):
         x1, y1 = x1y1
         x2, y2 = x2y2
@@ -94,7 +97,7 @@ class FrameBufScreen:
             x_center = int(x2 - (x_step*step))
             self.draw_circle(xy=(x_center,y_center),bgr=bgr_line,r=thickness//2)
 
-
+    # drawing boxes like this is criminal. needs a memset for the whole row.
     def draw_box(self,x1,x2,y1,y2,bgr_line, thickness=1, bgr_fill=None):
         if x1 > x2:
             raise ValueError("Invalid X Coords: x1 must be < x2")
@@ -137,29 +140,48 @@ def main():
 
     # graph
 
+    #starting color
     color = [128,128,128]
 
+    # draw squiggly lines forever
     while(True):
         ysz = len(fb.ypixels)
         xsz = len(fb.xpixels)
+        
+        # starting y
         y_0 = random.choice(fb.ypixels)
+        
+        # random angle (rise/run) to onscreen ending y
         x_ = random.uniform(-y_0-ysz,ysz-y_0)/xsz
+        
+        # squiggle size (height)
         s_ = [random.randrange(-300,300) for _ in range(3)]
+        
+        # squiggle ferocity (speed) 
         f_ = [random.randrange(10,300) for _ in range(3)]
+        
+        # line thickness
         thickness = random.randrange(1,10)
+        
+        # squiggle equation
         eqn = lambda x: x_*x - s_[0]*sin(x/f_[0]) - s_[1]*sin(x/f_[1]) + s_[2]*sin(x/6)*sin(x/f_[2]) + y_0
+        
+        # segment begin
         oldxy = 0, y_0
+        
+        # max color change per pixel x
         colordelta = 5
+        
         for x in fb.xpixels:
-            try:
-                newxy = x,int(eqn(x))
-                for i in range(3):
-                    color[i] = max(min(255, color[i]+random.randrange(-colordelta,colordelta)),0)
-                fb.draw_line(newxy, oldxy, bgr_line=color, thickness=thickness)
-                oldxy = newxy
-                fb.write()
-            except ValueError:
-                pass
-
-
-main()
+            newxy = x,int(eqn(x))
+            
+            # three chanel random color bump
+            for i in range(3): 
+                color[i] = max(min(255, color[i]+random.randrange(-colordelta,colordelta)),0)
+            
+            fb.draw_line(newxy, oldxy, bgr_line=color, thickness=thickness)
+            oldxy = newxy
+            fb.write()
+            
+if __name__ == "__main__":
+    main()
